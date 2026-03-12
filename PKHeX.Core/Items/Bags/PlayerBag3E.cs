@@ -1,27 +1,28 @@
 using System;
 using System.Collections.Generic;
 using static PKHeX.Core.InventoryType;
-
 namespace PKHeX.Core;
 
 public sealed class PlayerBag3E : PlayerBag, IPlayerBag3
 {
     private const int BaseOffset = 0x0498;
 
+    // NOTE FOR POKEMON NULL:
+    // The bag has been expanded with additional sections (Consumables, Niche Items, Special, etc.)
+    // which shifts the TMs/HMs and other pouches to different offsets.
+    // To avoid corrupting the save, we ONLY read/write the Berry pouch.
+    // Berry pouch offset and slot count are unchanged from vanilla Emerald.
+
     public override IReadOnlyList<InventoryPouch3> Pouches { get; } = GetPouches(ItemStorage3E.Instance);
     public override ItemStorage3E Info => ItemStorage3E.Instance;
 
     private static InventoryPouch3[] GetPouches(ItemStorage3E info) =>
     [
-        new(0x0C8, 30, 099, info, Items),
-        new(0x140, 30, 001, info, KeyItems),
-        new(0x1B8, 16, 099, info, Balls),
-        new(0x1F8, 64, 099, info, TMHMs),
         new(0x2F8, 46, 999, info, Berries),
-        new(0x000, 50, 999, info, PCItems),
     ];
 
     public PlayerBag3E(SAV3E sav) : this(sav.Large[BaseOffset..], sav.SecurityKey) { }
+
     public PlayerBag3E(ReadOnlySpan<byte> data, uint security)
     {
         UpdateSecurityKey(security);
@@ -29,13 +30,13 @@ public sealed class PlayerBag3E : PlayerBag, IPlayerBag3
     }
 
     public override void CopyTo(SaveFile sav) => CopyTo((SAV3E)sav);
+
+    // Only write back the berry pouch — all other bag sections are left completely untouched.
     public void CopyTo(SAV3E sav) => CopyTo(sav.Large[BaseOffset..]);
     public void CopyTo(Span<byte> data) => Pouches.SaveAll(data);
 
     public override int GetMaxCount(InventoryType type, int itemIndex)
     {
-        if (type is TMHMs && ItemConverter.IsItemHM3((ushort)itemIndex))
-            return 1;
         return GetMaxCount(type);
     }
 
